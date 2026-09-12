@@ -14,3 +14,6 @@ pycountry==26.2.16
 fastapi==0.136.3
 uvicorn==0.48.0
 jinja2==3.1.6
+langchain-mcp-adapters==0.3.0 #for creating the mcp client
+nest_asyncio==1.6.0 #for nested event loops
+mcp==1.28.1

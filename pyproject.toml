@@ -1,0 +1,19 @@
+[project]
+name = "tripmate-ai-a-multi-agent-travel-planner-with-langgraph"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Sumran Harchirkar", email = "sumranharchirkar58@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "mcp==1.28.1",
+]
+
+[project.scripts]
+tripmate-ai-a-multi-agent-travel-planner-with-langgraph = "tripmate_ai_a_multi_agent_travel_planner_with_langgraph:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
