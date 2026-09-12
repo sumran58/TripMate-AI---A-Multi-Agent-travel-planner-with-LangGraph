@@ -20,8 +20,10 @@ from langchain_core.messages import (
     AIMessage,
     SystemMessage,
 )
+import asyncio
 from langchain_groq import ChatGroq
-from tools.tavily_tool import tavily_search
+#from tools.tavily_tool import tavily_search
+from mcp_client_test import tavily_mcp_search
 from tools.flight_tool import search_flights
 
 
@@ -72,7 +74,8 @@ def flight_agent(state:TravelState):
 #hotel agent 
 def hotel_agent(state:TravelState):
     query=f"best hotels for {state['user_query']}"
-    hotel_results=tavily_search(query)
+    #hotel_results=tavily_search(query)
+    hotel_results=asyncio.run(tavily_mcp_search(query))
     return{
         "hotel_results":hotel_results,
         "messages":[AIMessage(content="Hotel information  fetched ")],

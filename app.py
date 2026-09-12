@@ -8,6 +8,9 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+#this is to allow nested aync loops in fastapi
+import nest_asyncio
+nest_asyncio.apply()
 
 BASE_DIR = Path(__file__).resolve().parent
 
