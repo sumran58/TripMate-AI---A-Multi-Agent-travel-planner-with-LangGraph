@@ -415,29 +415,43 @@ Create a complete travel itinerary.
 User Query:
 {state['user_query']}
 
+Trip Constraints:
+{limit_text(state.get('trip_constraints', {}), 1500)}
+
 Flight Results:
-{limit_text(state['flight_results'], 1500)}
+{limit_text(state.get('flight_results', ''), 1500)}
 
 Hotel Results:
-{limit_text(state['hotel_results'], 2000)}
+{limit_text(state.get('hotel_results', ''), 2000)}
 
 Weather Results:
-{limit_text(state['weather_results'], 2000)}
+{limit_text(state.get('weather_results', ''), 1500)}
 
+Budget Results:
+{limit_text(state.get('budget_results', ''), 1500)}
 
 Make the itinerary practical, budget-aware, and easy to follow.
+Create a clear draft that is ready for human review.
 """
-    response = llm.invoke([
-        SystemMessage(content="You are an expert travel planner."),
-        HumanMessage(content=prompt)
-    ])
+
+    response = llm.invoke(
+        [
+            SystemMessage(content="You are an expert travel planner."),
+            HumanMessage(content=prompt),
+        ]
+    )
+
+    approval_request = (
+        "Please review the generated draft itinerary. Approve it to create the "
+        "final polished plan, or provide feedback for revision."
+    )
+
     return {
         "itinerary": response.content,
-        "messages": [response],
-        "llm_calls": state.get("llm_calls", 0) + 1
+        "approval_request": approval_request,
+        "messages": [AIMessage(content="Draft itinerary created for human review.")],
+        "llm_calls": state.get("llm_calls", 0) + 1,
     }
-
-
 
 
 def final_agent(state: TravelState):
