@@ -482,30 +482,47 @@ def human_approval_agent(state: TravelState):
 
 
 
-
+#final agent 
 
 def final_agent(state: TravelState):
+    if state.get("approved", False):
+        review_instruction = (
+            "The user approved the draft. Preserve its decisions while polishing it."
+        )
+    else:
+        review_instruction = f"""
+The user requested a revision. Apply this feedback carefully:
+{limit_text(state.get('human_feedback', '') or 'Improve the draft before finalizing it.', 1000)}
+"""
+
     final_prompt = f"""
 Generate the final travel response for the user.
+
+Human Review:
+{review_instruction}
 
 User Request:
 {state['user_query']}
 
+Supervisor Constraints:
+{limit_text(state.get('trip_constraints', {}), 1200)}
+
 Flights:
-{limit_text(state['flight_results'], 1000)}
+{limit_text(state.get('flight_results', ''), 1000)}
 
 Hotels:
-{limit_text(state['hotel_results'], 1500)}
+{limit_text(state.get('hotel_results', ''), 1500)}
 
 Weather:
-{limit_text(state['weather_results'], 1500)}
+{limit_text(state.get('weather_results', ''), 1200)}
 
+Budget Analysis:
+{limit_text(state.get('budget_results', ''), 1200)}
 
-Itinerary:
-{limit_text(state['itinerary'], 3000)}
+Draft Itinerary:
+{limit_text(state.get('itinerary', ''), 2500)}
 
 Format the final answer beautifully using these sections:
-
 1. Trip Summary
 2. Flight Information
 3. Hotel Suggestions
@@ -516,33 +533,100 @@ Format the final answer beautifully using these sections:
 
 Important:
 - Be clear and practical.
-- Mention that live flight API may not provide ticket prices if pricing is unavailable.
+- Mention that live flight APIs may not provide ticket prices when pricing is unavailable.
 - Include weather-based travel advice.
 - Keep the response useful for real travel planning.
+- Incorporate the human feedback when revision was requested.
 """
-    response = llm.invoke([
-        SystemMessage(content="You are a professional AI travel booking assistant."),
-        HumanMessage(content=final_prompt)
-    ])
+
+    response = llm.invoke(
+        [
+            SystemMessage(
+                content="You are a professional AI travel booking assistant."
+            ),
+            HumanMessage(content=final_prompt),
+        ]
+    )
+
     return {
+        "final_response": response.content,
         "messages": [response],
-        "llm_calls": state.get("llm_calls", 0) + 1
+        "llm_calls": state.get("llm_calls", 0) + 1,
     }
+
+ROUTE_MAP = {
+    "guardrail_blocked": "guardrail_blocked",
+    "flight_agent": "flight_agent",
+    "hotel_agent": "hotel_agent",
+    "weather_agent": "weather_agent",
+    "budget_agent": "budget_agent",
+    "itinerary_agent": "itinerary_agent",
+}
+
+
+def _selected_agents(state: TravelState) -> list[str]:
+    selected = state.get("selected_agents", [])
+    return [agent for agent in AGENT_ORDER if agent in selected]
+
+
+def route_from_supervisor(state: TravelState) -> str:
+    if not state.get("guardrail_allowed", True):
+        return "guardrail_blocked"
+
+    selected = _selected_agents(state)
+    return selected[0] if selected else "itinerary_agent"
+
+
+def route_after_agent(current_agent: str):
+    def route(state: TravelState) -> str:
+        selected = _selected_agents(state)
+        current_index = AGENT_ORDER.index(current_agent)
+
+        for next_agent in AGENT_ORDER[current_index + 1 :]:
+            if next_agent in selected:
+                return next_agent
+
+        return "itinerary_agent"
+
+    return route
+
+
+
 
 
 #graph building and nodes 
 graph = StateGraph(TravelState)
+
+graph.add_node("supervisor", supervisor_agent)
+graph.add_node("guardrail_blocked", guardrail_blocked_agent)
 graph.add_node("flight_agent", flight_agent)
 graph.add_node("hotel_agent", hotel_agent)
 graph.add_node("weather_agent", weather_agent)
+graph.add_node("budget_agent", budget_agent)
 graph.add_node("itinerary_agent", itinerary_agent)
+graph.add_node("human_approval", human_approval_agent)
 graph.add_node("final_agent", final_agent)
-graph.add_edge(START, "flight_agent")
-graph.add_edge("flight_agent", "hotel_agent")
-graph.add_edge("hotel_agent", "weather_agent")
-graph.add_edge("weather_agent", "itinerary_agent")
-graph.add_edge("itinerary_agent", "final_agent")
+
+graph.add_edge(START, "supervisor")
+graph.add_conditional_edges("supervisor", route_from_supervisor, ROUTE_MAP)
+
+graph.add_conditional_edges(
+    "flight_agent", route_after_agent("flight_agent"), ROUTE_MAP
+)
+graph.add_conditional_edges(
+    "hotel_agent", route_after_agent("hotel_agent"), ROUTE_MAP
+)
+graph.add_conditional_edges(
+    "weather_agent", route_after_agent("weather_agent"), ROUTE_MAP
+)
+graph.add_conditional_edges(
+    "budget_agent", route_after_agent("budget_agent"), ROUTE_MAP
+)
+
+graph.add_edge("itinerary_agent", "human_approval")
+graph.add_edge("human_approval", "final_agent")
 graph.add_edge("final_agent", END)
+graph.add_edge("guardrail_blocked", END)
 
 
 
