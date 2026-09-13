@@ -333,6 +333,8 @@ def flight_agent(state: TravelState):
         "llm_calls": state.get("llm_calls", 0) + 1
     }
 
+#hotel agent 
+
 def hotel_agent(state:TravelState):
     query=f"best hotels for {state['user_query']}"
     hotel_results=asyncio.run(tavily_mcp_search(query))
@@ -343,6 +345,7 @@ def hotel_agent(state:TravelState):
         "llm_calls":state.get("llm_calls",0)+1
     }
 
+#weather agent 
 def weather_agent(state: TravelState):
     city = extract_destination(state["user_query"])
     weather_data = asyncio.run(weather_mcp_search(city))
@@ -360,6 +363,51 @@ def weather_agent(state: TravelState):
         "messages": [AIMessage(content="Weather information fetched")]
     }
 
+# Budget Agent - new specialist
+
+def budget_agent(state: TravelState):
+    prompt = f"""
+Analyze whether this trip is realistic for the user's budget.
+
+User Query:
+{state['user_query']}
+
+Trip Constraints:
+{state.get('trip_constraints', {})}
+
+Flight Results:
+{state.get('flight_results', '')}
+
+Hotel Results:
+{state.get('hotel_results', '')}
+
+Weather Results:
+{state.get('weather_results', '')}
+
+Return:
+1. Estimated cost categories
+2. Budget risk areas
+3. Money-saving suggestions
+4. Overall feasibility
+
+If exact live prices are unavailable, clearly label estimates as approximate.
+"""
+
+    response = llm.invoke(
+        [
+            SystemMessage(content="You are a practical travel budget analyst."),
+            HumanMessage(content=prompt),
+        ]
+    )
+
+    return {
+        "budget_results": response.content,
+        "messages": [AIMessage(content="Budget assessment generated.")],
+        "llm_calls": state.get("llm_calls", 0) + 1,
+    }
+
+
+#itenary agent
 def itinerary_agent(state: TravelState):
     prompt = f"""
 Create a complete travel itinerary.
@@ -388,6 +436,9 @@ Make the itinerary practical, budget-aware, and easy to follow.
         "messages": [response],
         "llm_calls": state.get("llm_calls", 0) + 1
     }
+
+
+
 
 def final_agent(state: TravelState):
     final_prompt = f"""
@@ -434,6 +485,8 @@ Important:
         "llm_calls": state.get("llm_calls", 0) + 1
     }
 
+
+#graph building and nodes 
 graph = StateGraph(TravelState)
 graph.add_node("flight_agent", flight_agent)
 graph.add_node("hotel_agent", hotel_agent)
@@ -447,6 +500,8 @@ graph.add_edge("weather_agent", "itinerary_agent")
 graph.add_edge("itinerary_agent", "final_agent")
 graph.add_edge("final_agent", END)
 
+
+
 DATABASE_URL = get_database_url()
 _conn = psycopg.connect(
     DATABASE_URL,
@@ -456,6 +511,8 @@ _conn = psycopg.connect(
 checkpointer = PostgresSaver(_conn)
 checkpointer.setup()
 travel_graph = graph.compile(checkpointer=checkpointer)
+
+
 
 def run_travel_agent(user_input: str, thread_id: str | None = None):
     if not thread_id:
